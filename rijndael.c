@@ -4,6 +4,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 // TODO: Any other files you need to include should go here
 
 #include "rijndael.h"
@@ -73,14 +74,71 @@ const unsigned char r_con[32] = {
  */
 void sub_bytes(unsigned char *block) {
   // TODO: Implement me!
+  unsigned char *ptr = block;
+    unsigned char *end = block + BLOCK_SIZE;
+
+    while (ptr < end) {
+        *ptr = s_box[*ptr];
+        ptr++;
+    }
 }
 
 void shift_rows(unsigned char *block) {
   // TODO: Implement me!
+  // Row 1: No shift
+
+    // Row 2: Shift left by 1 byte
+    unsigned char temp = block[4];
+    block[4] = block[5];
+    block[5] = block[6];
+    block[6] = block[7];
+    block[7] = temp;
+
+    // Row 3: Shift left by 2 bytes
+    temp = block[8];
+    block[8] = block[10];
+    block[10] = temp;
+    temp = block[9];
+    block[9] = block[11];
+    block[11] = temp;
+
+    // Row 4: Shift left by 3 bytes
+    temp = block[12];
+    block[12] = block[15];
+    block[15] = block[14];
+    block[14] = block[13];
+    block[13] = temp;
+}
+
+unsigned char xtime(unsigned char x) {
+    return (x & 0x80) ? ((x << 1) ^ 0x1b) : (unsigned char)(x << 1);
+}
+
+void mix_single_column(unsigned char *word) {
+    unsigned char t = word[0] ^ word[1] ^ word[2] ^ word[3];
+    unsigned char temp = word[0];
+
+    word[0] = word[0] ^ t ^ xtime(word[0] ^ word[1]);
+    word[1] = word[1] ^ t ^ xtime(word[1] ^ word[2]);
+    word[2] = word[2] ^ t ^ xtime(word[2] ^ word[3]);
+    word[3] = word[3] ^ t ^ xtime(word[3] ^ temp);
 }
 
 void mix_columns(unsigned char *block) {
   // TODO: Implement me!
+  for (int i = 0; i < 4; i++) {
+        unsigned char column[4];
+        // Extract the column
+        for (int j = 0; j < 4; j++) {
+            column[j] = block[i + j * 4];
+        }
+        // Mix the single column
+        mix_single_column(column);
+        // Update the block with the mixed column
+        for (int j = 0; j < 4; j++) {
+            block[i + j * 4] = column[j];
+        }
+    }
 }
 
 /*
@@ -103,6 +161,11 @@ void invert_mix_columns(unsigned char *block) {
  */
 void add_round_key(unsigned char *block, unsigned char *round_key) {
   // TODO: Implement me!
+  // Iterate over each byte of the block and round key
+    for (int i = 0; i < 16; i++) {
+        // XOR corresponding bytes of block and round key
+        block[i] ^= round_key[i];
+    }
 }
 
 unsigned char * g (unsigned char wInput[4], int counter)
@@ -198,16 +261,44 @@ unsigned char *expand_key(unsigned char *cipher_key) {
  * header file should go here
  */
 unsigned char *aes_encrypt_block(unsigned char *plaintext, unsigned char *key) {
-  // TODO: Implement me!
+// rounds: 10
+  // key: 128 bits / 16 bytes as hex
+  // block: 128 bits / 16 bytes as hex
 
+  // check if the block size is 128 bits
   if (BLOCK_SIZE != 16 || ROUNDS != 10) {
     return NULL;
   }
 
+  // expand the key
+  // 11 round keys, 16 bytes each, the first is the original key
   unsigned char *roundkeys = expand_key(key);
 
-  unsigned char *output =
-      (unsigned char *)malloc(sizeof(unsigned char) * BLOCK_SIZE);
+  // encrypt the block
+  // allocate one block for the output
+  unsigned char *output = (unsigned char *)malloc(BLOCK_SIZE);
+
+  memcpy(output, plaintext, BLOCK_SIZE);
+
+  // round 1: add round key
+  add_round_key(output, &roundkeys[0]);
+
+  // round 2-9: sub bytes, shift rows, mix columns, add round key
+  for (int i = 1; i < ROUNDS; i++) {
+    sub_bytes(output);
+    shift_rows(output);
+    mix_columns(output);
+    add_round_key(output, &roundkeys[i * BLOCK_SIZE]);
+  }
+
+  // round 10: sub bytes, shift rows, add round key
+  sub_bytes(output);
+  shift_rows(output);
+  add_round_key(output, &roundkeys[ROUNDS * BLOCK_SIZE]);
+
+  free(roundkeys);
+
+  // return the encrypted block
   return output;
 }
 
