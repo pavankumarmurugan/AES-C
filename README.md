@@ -16,10 +16,10 @@ This repository contains a basic implementation of the Advanced Encryption Stand
    - Use the provided Makefile to compile the source files and generate the executable.
 ```bash
 make -m Makefile
-```exit
+exit
 
 2. **Run Tests**:
 - Run the Python test script `tests.py` to verify the correctness of the AES implementation by comparing its output with a Python AES implementation.
 ```bash
 pytest tests.py -vv
-```exit
+exit
