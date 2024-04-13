@@ -1,13 +1,17 @@
 /*
- * TODO: Add your name and student number here, along with
- *       a brief description of this code.
+ * D23124670 / Pavan Kumar Murugan
+ *
+ * This file declares the function prototypes for the primary encryption
+ * and decryption operations. Additionally, it defines macros to enhance
+ * code readability and eliminate magic numbers.
+ *
  */
-
 #ifndef RIJNDAEL_H
 #define RIJNDAEL_H
 
 #define BLOCK_ACCESS(block, row, col) (block[(row * 4) + col])
 #define BLOCK_SIZE 16
+#define WORD_SIZE 4
 #define ROUNDS 10
 
 /*

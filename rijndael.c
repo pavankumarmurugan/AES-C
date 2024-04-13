@@ -1,11 +1,14 @@
 /*
- * TODO: Add your name and student number here, along with
- *       a brief description of this code.
+ * D23124670 / Pavan Kumar Murugan
+ * This file implements functions declared in the header file for encrypting and decrypting a single block
+ * of data using the AES algorithm. The block and key sizes are both 128 bits. The implementation is inspired
+ * by the Python AES algorithm implementation available at:
+ * https://github.com/boppreh/aes.git
+ * 
  */
 
 #include <stdlib.h>
 #include <string.h>
-// TODO: Any other files you need to include should go here
 
 #include "rijndael.h"
 
@@ -70,242 +73,470 @@ const unsigned char r_con[32] = {
 };
 
 /*
- * Operations used when encrypting a block
+ * my_free Function
+ *
+ * This function deallocates the memory block previously allocated by the malloc function.
+ * It is a wrapper for the standard library function free.
+ *
+ * Parameters:
+ *   - pointer: Pointer to the memory block to be deallocated.
+ *
+ */
+void my_free(unsigned char *pointer) { free(pointer); }
+
+/*
+ * InvertSubBytes Function
+ *
+ * This function implements the inverse SubBytes transformation in the AES decryption algorithm.
+ * It substitutes each byte in the input block with a corresponding value from the inverse S-box lookup table.
+ *
+ * Parameters:
+ *   - block: Pointer to the 128-bit block of data (16 bytes) on which the inverse SubBytes operation will be applied.
+ *
+ */
+void invert_sub_bytes(unsigned char *block) {
+  // Iterate through each byte in the block
+  unsigned char *ptr = block;
+  unsigned char *end = block + BLOCK_SIZE;
+  for (; ptr < end; ptr++) {
+    // Apply inverse substitution to each byte using the inverse S-box
+    *ptr = inv_s_box[*ptr];
+  }
+}
+
+/*
+ * SubBytes Function
+ *
+ * This function implements the SubBytes transformation in the AES encryption algorithm.
+ * It substitutes each byte in the input block with a corresponding value from the S-box lookup table.
+ *
+ * Parameters:
+ *   - block: Pointer to the 128-bit block of data (16 bytes) on which the SubBytes operation will be applied.
+ *
  */
 void sub_bytes(unsigned char *block) {
-  // TODO: Implement me!
-  unsigned char *ptr = block;
+  // Initialize a pointer to the start of the block
+    unsigned char *ptr = block;
+    // Calculate the end pointer of the block
     unsigned char *end = block + BLOCK_SIZE;
 
+    // Iterate over each byte in the block
     while (ptr < end) {
+        // Substitute the byte using the S-box lookup table
         *ptr = s_box[*ptr];
+        // Move to the next byte in the block
         ptr++;
     }
 }
 
-void shift_rows(unsigned char *block) {
-  // TODO: Implement me!
-  // Row 1: No shift
-
-    // Row 2: Shift left by 1 byte
-    unsigned char temp = block[4];
-    block[4] = block[5];
-    block[5] = block[6];
-    block[6] = block[7];
-    block[7] = temp;
-
-    // Row 3: Shift left by 2 bytes
-    temp = block[8];
-    block[8] = block[10];
-    block[10] = temp;
-    temp = block[9];
-    block[9] = block[11];
-    block[11] = temp;
-
-    // Row 4: Shift left by 3 bytes
-    temp = block[12];
-    block[12] = block[15];
-    block[15] = block[14];
-    block[14] = block[13];
-    block[13] = temp;
-}
-
-unsigned char xtime(unsigned char x) {
-    return (x & 0x80) ? ((x << 1) ^ 0x1b) : (unsigned char)(x << 1);
-}
-
-void mix_single_column(unsigned char *word) {
-    unsigned char t = word[0] ^ word[1] ^ word[2] ^ word[3];
-    unsigned char temp = word[0];
-
-    word[0] = word[0] ^ t ^ xtime(word[0] ^ word[1]);
-    word[1] = word[1] ^ t ^ xtime(word[1] ^ word[2]);
-    word[2] = word[2] ^ t ^ xtime(word[2] ^ word[3]);
-    word[3] = word[3] ^ t ^ xtime(word[3] ^ temp);
-}
-
-void mix_columns(unsigned char *block) {
-  // TODO: Implement me!
-  for (int i = 0; i < 4; i++) {
-        unsigned char column[4];
-        // Extract the column
-        for (int j = 0; j < 4; j++) {
-            column[j] = block[i + j * 4];
-        }
-        // Mix the single column
-        mix_single_column(column);
-        // Update the block with the mixed column
-        for (int j = 0; j < 4; j++) {
-            block[i + j * 4] = column[j];
-        }
-    }
-}
-
 /*
- * Operations used when decrypting a block
+ * Shift Rows Function
+ *
+ * This function implements the ShiftRows transformation in the AES encryption algorithm.
+ * It cyclically shifts the bytes in each row of the input block to the left.
+ * The first row remains unchanged, the second row is shifted by one position to the left,
+ * the third row is shifted by two positions to the left, and the fourth row is shifted by three positions to the left.
+ *
+ * Parameters:
+ *   - block: Pointer to the 128-bit block of data (16 bytes) on which the ShiftRows operation will be applied.
+ *
  */
-void invert_sub_bytes(unsigned char *block) {
-  // TODO: Implement me!
-}
+void shift_rows(unsigned char *block) {
+  unsigned char temp;
 
-void invert_shift_rows(unsigned char *block) {
-  // TODO: Implement me!
-}
+    // Shift the second row
+    temp = block[1];
+    block[1] = block[5];
+    block[5] = block[9];
+    block[9] = block[13];
+    block[13] = temp;
 
-void invert_mix_columns(unsigned char *block) {
-  // TODO: Implement me!
+    // Shift the third row
+    temp = block[2];
+    block[2] = block[10];
+    block[10] = temp;
+    temp = block[6];
+    block[6] = block[14];
+    block[14] = temp;
+
+    // Shift the fourth row
+    temp = block[15];
+    block[15] = block[11];
+    block[11] = block[7];
+    block[7] = block[3];
+    block[3] = temp;
 }
 
 /*
- * This operation is shared between encryption and decryption
+ * Loop Function
+ *
+ * This function implements the loop operation used in AES encryption, which involves left-shifting a byte by one bit
+ * and performing an XOR operation with the polynomial 0x1b if the most significant bit of the byte is set.
+ *
+ * Parameters:
+ *   - x: The byte value to which the loop operation will be applied.
+ *
+ * Returns:
+ *   - The result of the loop operation on the input byte 'x'.
+ *
+ */
+unsigned char loop(unsigned char x) {
+  // Left shift x by 1 bit
+    unsigned char result = x << 1;
+
+    // If the most significant bit of x is set (i.e., x & 0x80 is non-zero)
+    if (x & 0x80) {
+        // XOR the result with the polynomial 0x1b
+        result ^= 0x1b;
+    }
+
+    // Return the result after left shifting and XOR operation
+    return result;
+}
+
+/*
+ * Mix Single Column Function
+ *
+ * This function applies the MixSingleColumn operation in AES encryption to a given 4-byte word.
+ * It performs the mixing operation on each byte of the word based on specific XOR and looped multiplication operations.
+ *
+ * Parameters:
+ *   - word: A pointer to the 4-byte word to which the MixSingleColumn operation will be applied.
+ *
+ */
+void mix_single_column(unsigned char *word) {
+  // Store the original values of the word
+    unsigned char t0 = word[0], t1 = word[1], t2 = word[2], t3 = word[3];
+    unsigned char temp;
+
+    // Calculate the value of 'temp' by XORing all bytes of the word
+    temp = t0 ^ t1 ^ t2 ^ t3;
+
+    // Mix the first byte of the word
+    word[0] = t0 ^ temp ^ loop(t0 ^ t1);
+
+    // Mix the second byte of the word
+    word[1] = t1 ^ temp ^ loop(t1 ^ t2);
+
+    // Mix the third byte of the word
+    word[2] = t2 ^ temp ^ loop(t2 ^ t3);
+
+    // Mix the fourth byte of the word
+    word[3] = t3 ^ temp ^ loop(t3 ^ t0);
+}
+
+/*
+ * Mix Columns Function
+ *
+ * This function applies the MixColumns operation in AES encryption to a given block of data.
+ * Unlike the traditional MixColumns operation, where columns are mixed, this function mixes
+ * rows by treating each 4-byte row as a column and applying the mix_single_column function.
+ *
+ * Parameters:
+ *   - block: A pointer to the block of data to which the MixColumns operation will be applied.
+ *
+ */
+void mix_columns(unsigned char *block) {
+  unsigned char (*m)[4][4] = (unsigned char(*)[4][4])block;
+
+  for (int i = 0; i < 4; i++) {
+    // instead of mixing a column, we mix a row
+    mix_single_column((unsigned char *)m[0][i]);
+  }
+}
+
+/*
+ * Invert Shift Rows Function
+ *
+ * This function performs the inverse ShiftRows operation in AES decryption for a given block of data.
+ * The operation is applied row-wise to each 4-byte row of the block, with different shifting patterns
+ * for each row to revert the effect of the original ShiftRows operation.
+ *
+ * Parameters:
+ *   - block: A pointer to the block of data to which the inverse ShiftRows operation will be applied.
+ *
+ */
+void invert_shift_rows(unsigned char *block) {
+ unsigned char temp;
+
+    // For the second row, perform a right shift by one position
+    temp = block[13];
+    block[13] = block[9];
+    block[9] = block[5];
+    block[5] = block[1];
+    block[1] = temp;
+
+    // For the third row, perform a right shift by two positions
+    temp = block[2];
+    block[2] = block[10];
+    block[10] = temp;
+    temp = block[6];
+    block[6] = block[14];
+    block[14] = temp;
+
+    // For the fourth row, perform a right shift by three positions
+    temp = block[3];
+    block[3] = block[7];
+    block[7] = block[11];
+    block[11] = block[15];
+    block[15] = temp;
+}
+
+/*
+ * Invert Mix Columns Function
+ *
+ * This function performs the inverse MixColumns operation in AES decryption for a given block of data.
+ * The operation is applied column-wise to each 4-byte column of the block, and the transformation
+ * is done using pre-calculated values u and v.
+ *
+ * Parameters:
+ *   - block: A pointer to the block of data to which the inverse MixColumns operation will be applied.
+ *
+ */
+void invert_mix_columns(unsigned char *block) {
+  unsigned char u, v;
+
+  // Column 0
+  // Calculate u and v values for the first column
+  u = loop(loop(block[0] ^ block[2]));
+  v = loop(loop(block[1] ^ block[3]));
+
+  // Apply the mix column transformation to the first column
+  block[0] ^= u;
+  block[1] ^= v;
+  block[2] ^= u;
+  block[3] ^= v;
+
+  // Column 1
+  // Calculate u and v values for the second column
+  u = loop(loop(block[4] ^ block[6]));
+  v = loop(loop(block[5] ^ block[7]));
+
+  // Apply the mix column transformation to the second column
+  block[4] ^= u;
+  block[5] ^= v;
+  block[6] ^= u;
+  block[7] ^= v;
+
+  // Column 2
+  // Calculate u and v values for the third column
+  u = loop(loop(block[8] ^ block[10]));
+  v = loop(loop(block[9] ^ block[11]));
+
+  // Apply the mix column transformation to the third column
+  block[8] ^= u;
+  block[9] ^= v;
+  block[10] ^= u;
+  block[11] ^= v;
+
+  // Column 3
+  // Calculate u and v values for the fourth column
+  u = loop(loop(block[12] ^ block[14]));
+  v = loop(loop(block[13] ^ block[15]));
+
+  // Apply the mix column transformation to the fourth column
+  block[12] ^= u;
+  block[13] ^= v;
+  block[14] ^= u;
+  block[15] ^= v;
+
+  // After applying the mix column transformation to all columns,
+  // perform the mix_columns operation on the entire block
+  mix_columns(block);
+}
+
+/*
+ * Add Round Key Function
+ *
+ * This function performs the AddRoundKey operation in AES encryption by XORing each byte in the block
+ * with the corresponding byte in the round key.
+ *
+ * Parameters:
+ *   - block: A pointer to the block of data to which the round key will be added.
+ *   - round_key: A pointer to the round key data.
+ *
  */
 void add_round_key(unsigned char *block, unsigned char *round_key) {
-  // TODO: Implement me!
-  // Iterate over each byte of the block and round key
+  // Iterate over each byte in the block and perform XOR operation with the corresponding byte in the round key
     for (int i = 0; i < 16; i++) {
-        // XOR corresponding bytes of block and round key
-        block[i] ^= round_key[i];
+        block[i] ^= round_key[i]; // XOR operation between the byte in the block and the byte in the round key
     }
-}
-
-unsigned char * g (unsigned char wInput[4], int counter)
-{
-    unsigned char * wReady = malloc(4);
-    unsigned char temp[4] = "";
-    unsigned char a = wInput[0];
-    for(int i =0;i<3; i++)
-    {
-        temp[i] = wInput[(i+1)];
-    }
-    temp[3] = a;
-
-    for (int i =0; i<4;i++)
-        temp[i] = s_box[temp[i]];
-
-    //unsigned char array formed for xoring with rcon
-
-    unsigned char array2[4] = "";
-    array2[0] = r_con[counter];
-    array2[1] = array2[2] = array2[3] = 0x00;
-
-    for (int i=0;i<4;i++)
-    wReady[i] = temp[i] ^ array2[i];
-    return wReady;
 }
 
 /*
- * This function should expand the round key. Given an input,
- * which is a single 128-bit key, it should return a 176-byte
- * vector, containing the 11 round keys one after the other
+ * Key Expansion Function
+ *
+ * This function expands the given cipher key to generate the round keys used in AES encryption.
+ * It allocates memory for the expanded key, copies the original cipher key to the first block,
+ * and iterates over each round to generate subsequent round keys. For each round, it performs
+ * key schedule operations, including rotation, byte substitution, XOR operations with the previous
+ * round key, and XOR with round constants.
+ *
+ * Parameters:
+ *   - cipher_key: A pointer to the original cipher key.
+ *
+ * Returns:
+ *   - A pointer to the expanded key if memory allocation is successful, or NULL if memory allocation fails.
+ *
  */
 unsigned char *expand_key(unsigned char *cipher_key) {
-  // TODO: Implement me!
-  unsigned char words[44][4];
-    for (int i = 0; i < 44; ++i)
-    {
-        for (int j = 0; j <4; ++j)
-        {
-            words[i][j]=0x00;
-        }
+  // Allocate memory for the expanded key
+    unsigned char *output = (unsigned char *)malloc(BLOCK_SIZE * (ROUNDS + 1));
+    if (output == NULL) {
+        return NULL; // Return NULL if memory allocation fails
     }
-    
-    unsigned char * expandedKey = malloc(176);
-    
-    int byteCount = 0; //this is to keep a count on the bytes of the expandedKey array
-    
-    for (int i=0;i<16;i++)
-            expandedKey[i] = cipher_key[i];
 
-    for(int j=0;j<4;j++)
-    {
-         for(int k=0;k<4;k++)
-         {
-            words[j][k] = expandedKey[byteCount];
-            byteCount++;
-         }
-    }
-    for(int l=4;l<44;l++)
-    {
-        if((l%4)==0)
-        {
-            for(int m=0;m<4;m++)
-            {
-              words[l][m] = words[(l-4)][m] ^ g(words[l-1], (l/4))[m];
+    // Copy the original cipher key to the first block of the output
+    memcpy(output, cipher_key, BLOCK_SIZE);
+
+    // Iterate over each round to generate round keys
+    for (int round = 1; round < ROUNDS + 1; round++) {
+        // Calculate pointers to the new key and the last key
+        unsigned char *new_key = &output[round * BLOCK_SIZE];
+        unsigned char *last_key = &output[(round - 1) * BLOCK_SIZE];
+
+        memcpy(new_key, &last_key[BLOCK_SIZE - WORD_SIZE], WORD_SIZE);
+
+        // Rotate the last word of the previous round key
+        unsigned char temp = new_key[0];
+        new_key[0] = new_key[1];
+        new_key[1] = new_key[2];
+        new_key[2] = new_key[3];
+        new_key[3] = temp;
+
+        // Substitute bytes of the new key using the S-box
+        for (int i = 0; i < WORD_SIZE; i++) {
+            new_key[i] = s_box[new_key[i]];
+        }
+
+        // XOR the first word of the new key with the last word of the previous round key
+        for (int i = 0; i < WORD_SIZE; i++) {
+            new_key[i] ^= last_key[i];
+        }
+
+        // XOR the first byte of the new key with the round constant
+        new_key[0] ^= r_con[round];
+
+        // Generate the rest of the words of the new key using XOR operations
+        for (int j = 1; j < 4; j++) {
+            for (int k = 0; k < WORD_SIZE; k++) {
+                new_key[j * WORD_SIZE + k] = new_key[(j - 1) * WORD_SIZE + k] ^ last_key[j * WORD_SIZE + k];
             }
         }
-        else
-        {
-            for(int n=0;n<4;n++)
-            {
-                words[l][n] = words[l-1][n] ^ words[l-4][n];
-            }
-        }
     }
 
-    int loc=0;
-    for(int i=0;i<44;i++ )
-    {
-        for(int j=0;j<4;j++)
-        {
-            expandedKey[loc] = words[i][j];
-            loc++;
-        }
-    }
-    return expandedKey;
-
-  return 0;
+    return output; // Return the expanded key
 }
 
 /*
- * The implementations of the functions declared in the
- * header file should go here
+ * AES Encryption Function
+ *
+ * This function encrypts a single block of data using the AES algorithm with a 128-bit block size and a 128-bit key.
+ * It performs the encryption process, including key expansion, round operations, and finalization, to produce the ciphertext block.
+ *
+ * Parameters:
+ *   - plaintext: A pointer to the plaintext block to be encrypted.
+ *   - key: A pointer to the encryption key.
+ *
+ * Returns:
+ *   - A pointer to the encrypted ciphertext block if successful, or NULL if the block size or number of rounds is incorrect,
+ *     or if memory allocation fails for round keys or the output block.
+ *
  */
 unsigned char *aes_encrypt_block(unsigned char *plaintext, unsigned char *key) {
-// rounds: 10
-  // key: 128 bits / 16 bytes as hex
-  // block: 128 bits / 16 bytes as hex
+    // Check if the block size is 128 bits and the number of rounds is 10
+    if (BLOCK_SIZE != 16 || ROUNDS != 10) {
+        return NULL; // Return NULL if the block size or the number of rounds is incorrect
+    }
 
-  // check if the block size is 128 bits
-  if (BLOCK_SIZE != 16 || ROUNDS != 10) {
-    return NULL;
-  }
+    // Expand the key to generate the round keys
+    unsigned char *roundkeys = expand_key(key);
+    if (roundkeys == NULL) {
+        return NULL; // Return NULL if memory allocation for round keys fails
+    }
 
-  // expand the key
-  // 11 round keys, 16 bytes each, the first is the original key
-  unsigned char *roundkeys = expand_key(key);
+    // Allocate memory for the output block
+    unsigned char *output = (unsigned char *)malloc(BLOCK_SIZE);
+    if (output == NULL) {
+        free(roundkeys);
+        return NULL; // Return NULL if memory allocation for output block fails
+    }
 
-  // encrypt the block
-  // allocate one block for the output
-  unsigned char *output = (unsigned char *)malloc(BLOCK_SIZE);
+    // Copy the plaintext block to the output
+    memcpy(output, plaintext, BLOCK_SIZE);
 
-  memcpy(output, plaintext, BLOCK_SIZE);
+    // Initial round: Add round key
+    add_round_key(output, roundkeys);
 
-  // round 1: add round key
-  add_round_key(output, &roundkeys[0]);
+    // Main rounds: SubBytes, ShiftRows, MixColumns, AddRoundKey
+    for (int round = 1; round < ROUNDS; round++) {
+        sub_bytes(output); // Substitute bytes using S-box
+        shift_rows(output); // Shift rows operation
+        mix_columns(output); // Mix columns operation
+        add_round_key(output, &roundkeys[round * BLOCK_SIZE]); // Add round key
+    }
 
-  // round 2-9: sub bytes, shift rows, mix columns, add round key
-  for (int i = 1; i < ROUNDS; i++) {
-    sub_bytes(output);
-    shift_rows(output);
-    mix_columns(output);
-    add_round_key(output, &roundkeys[i * BLOCK_SIZE]);
-  }
+    // Final round: SubBytes, ShiftRows, AddRoundKey
+    sub_bytes(output); // Substitute bytes using S-box
+    shift_rows(output); // Shift rows operation
+    add_round_key(output, &roundkeys[ROUNDS * BLOCK_SIZE]); // Add the last round key
 
-  // round 10: sub bytes, shift rows, add round key
-  sub_bytes(output);
-  shift_rows(output);
-  add_round_key(output, &roundkeys[ROUNDS * BLOCK_SIZE]);
+    // Free the memory allocated for the expanded key
+    free(roundkeys);
 
-  free(roundkeys);
-
-  // return the encrypted block
-  return output;
+    // Return the encrypted block
+    return output;
 }
 
+/*
+ * AES Decryption Function
+ *
+ * This function decrypts a single block of data using the AES algorithm with a 128-bit block size and a 128-bit key.
+ * It reverses the steps performed during encryption to obtain the original plaintext block from the given ciphertext block.
+ *
+ * Parameters:
+ *   - ciphertext: A pointer to the ciphertext block to be decrypted.
+ *   - key: A pointer to the encryption key.
+ *
+ * Returns:
+ *   - A pointer to the decrypted plaintext block if successful, or NULL if the block size or number of rounds is incorrect.
+ *
+ */
 unsigned char *aes_decrypt_block(unsigned char *ciphertext,
                                  unsigned char *key) {
-  // TODO: Implement me!
-  unsigned char *output =
-      (unsigned char *)malloc(sizeof(unsigned char) * BLOCK_SIZE);
+  // Check if the block size is 128 bits and the number of rounds is 10
+  if (BLOCK_SIZE != 16 || ROUNDS != 10) {
+    return NULL; // Return NULL if the block size or the number of rounds is incorrect
+  }
+
+  // Expand the key to generate the round keys
+  unsigned char *roundkeys = expand_key(key);
+
+  // Allocate memory for the output block
+  unsigned char *output = (unsigned char *)malloc(BLOCK_SIZE);
+
+  // Copy the ciphertext block to the output
+  memcpy(output, ciphertext, BLOCK_SIZE);
+
+  // Final round: Add round key, InvertShiftRows, InvertSubBytes
+  add_round_key(output, &roundkeys[ROUNDS * BLOCK_SIZE]); // Add the last round key
+  invert_shift_rows(output); // Reverse the shift rows operation
+  invert_sub_bytes(output); // Reverse the sub bytes operation
+
+  // Main rounds in reverse order: InvertMixColumns, InvertShiftRows, InvertSubBytes, AddRoundKey
+  for (int round = 9; round > 0; round--) {
+    add_round_key(output, roundkeys + (BLOCK_SIZE * round)); // Add the round key
+    invert_mix_columns(output); // Reverse the mix columns operation
+    invert_shift_rows(output); // Reverse the shift rows operation
+    invert_sub_bytes(output); // Reverse the sub bytes operation
+  }
+
+  // Initial round: Add round key
+  add_round_key(output, roundkeys); // Add the first round key
+
+  // Free the memory allocated for the expanded key
+  free(roundkeys);
+
+  // Return the decrypted block
   return output;
 }
